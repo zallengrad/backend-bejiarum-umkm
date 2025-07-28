@@ -1,0 +1,46 @@
+[
+  {
+    "id": 1,
+    "nama": "Cireng Dua Ellya",
+    "pemilik": "Bu Ellya",
+    "kategori": "Kuliner",
+    "alamat": "Kalicecep, Bejiarum, Kec. Kertek, Kabupaten Wonosobo, Jawa Tengah 56371",
+    "lat": -7.35986761253203,
+    "lng": 109.9416955177686,
+    "foto": [
+      "/images/id1.png"
+    ],
+    "deskripsi": "Menyediakan makanan tradisional dan gorengan rumahan yang bikin nagih!",
+    "link_maps": "https://maps.app.goo.gl/uYoeSuyvxiVj2ab79"
+  },
+  {
+    "id": 2,
+    "nama": "Cireng Mamake DanicSya",
+    "pemilik": "Bu Danic",
+    "kategori": "Kerajinan",
+    "alamat": "Kalicecep, Bejiarum, Kec. Kertek, Kabupaten Wonosobo, Jawa Tengah 56371",
+    "lat": -7.359952238886273,
+    "lng": 109.9433647890766,
+    "foto": [
+      "/images/id2.png",
+      "/images/id2-2.png"
+    ],
+    "deskripsi": "Produk Cireng",
+    "link_maps": "https://maps.app.goo.gl/9MFUhwTJtjWLXkUp6"
+  },
+  {
+    "id": 1753176949689,
+    "nama": "Cireng Modern",
+    "pemilik": "Pak Dedi",
+    "kategori": "Kuliner",
+    "alamat": "Bejiarum",
+    "lat": -7.35,
+    "lng": 109.94,
+    "foto": [
+      "/images/cirengA.png",
+      "/images/cirengB.png"
+    ],
+    "deskripsi": "Cireng isi mozarella",
+    "link_maps": "https://maps.app.goo.gl/abc123"
+  }
+]
