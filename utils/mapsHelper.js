@@ -1,6 +1,7 @@
 // backend/utils/mapsHelper.js
-const axios = require("axios"); // Pastikan axios sudah diinstal: npm install axios
+const axios = require("axios");
 
+// Fungsi yang sudah ada (untuk URL Maps standar)
 const extractLatLngFromGoogleMapsUrl = (url) => {
   if (!url || typeof url !== "string") {
     return null;
@@ -9,43 +10,19 @@ const extractLatLngFromGoogleMapsUrl = (url) => {
   let lat = null;
   let lng = null;
 
-  // --- Format Umum: /@lat,lng,zoom ---
-  const coordsMatch = url.match(/@(-?\d+\.?\d*),(-?\d+\.?\d*)/);
+  // Pola yang sudah ada: /@lat,lng,zoom, ?q=lat,lng, /place/.../@lat,lng
+  const coordsMatch = url.match(/@(-?\d+\.?\d*),(-?\d+\.?\d*)/) || url.match(/[?&]q=(-?\d+\.?\d*),(-?\d+\.?\d*)/) || url.match(/\/place\/[^/]+\/@(-?\d+\.?\d*),(-?\d+\.?\d*)/);
+
   if (coordsMatch && coordsMatch.length >= 3) {
     lat = parseFloat(coordsMatch[1]);
     lng = parseFloat(coordsMatch[2]);
     if (!isNaN(lat) && !isNaN(lng)) {
-      console.log(`  Extracted from @ format: ${lat}, ${lng}`);
+      console.log(`  Extracted from standard format: ${lat}, ${lng}`);
       return { lat, lng };
     }
   }
 
-  // --- Format Q (query): maps?q=lat,lng ---
-  const queryMatch = url.match(/[?&]q=(-?\d+\.?\d*),(-?\d+\.?\d*)/);
-  if (queryMatch && queryMatch.length >= 3) {
-    lat = parseFloat(queryMatch[1]);
-    lng = parseFloat(queryMatch[2]);
-    if (!isNaN(lat) && !isNaN(lng)) {
-      console.log(`  Extracted from ?q format: ${lat}, ${lng}`);
-      return { lat, lng };
-    }
-  }
-
-  // --- Format Embed/Place ID: /place/.../@lat,lng ---
-  const placeMatch = url.match(/\/place\/[^/]+\/@(-?\d+\.?\d*),(-?\d+\.?\d*)/);
-  if (placeMatch && placeMatch.length >= 3) {
-    lat = parseFloat(placeMatch[1]);
-    lng = parseFloat(placeMatch[2]);
-    if (!isNaN(lat) && !isNaN(lng)) {
-      console.log(`  Extracted from /place format: ${lat}, ${lng}`);
-      return { lat, lng };
-    }
-  }
-
-  // ✨ PERBAIKAN DI SINI: COBA EKSTRAK DARI FORMAT GOOGLEUSERCONTENT.COM KHUSUS (jika mengandung koordinat) ✨
-  // Ini adalah pola yang mungkin muncul dari redirect setelah googl.gl/maps
-  // Contoh: https://www.google.com/maps/search/?api=1&query=-7.360000,109.942000
-  // Contoh lain: https://www.google.com/maps/place/Cireng+dhiptha+al-azhar/@-7.360000,109.942000,17z
+  // Pola untuk query=lat,lng (misal dari googleusercontent redirect)
   const googleSearchQueryMatch = url.match(/[?&]query=(-?\d+\.?\d*),(-?\d+\.?\d*)/);
   if (googleSearchQueryMatch && googleSearchQueryMatch.length >= 3) {
     lat = parseFloat(googleSearchQueryMatch[1]);
@@ -56,36 +33,98 @@ const extractLatLngFromGoogleMapsUrl = (url) => {
     }
   }
 
-  console.warn("  WARNING: Could not extract lat/lng from URL:", url);
   return null;
+};
+
+// Fungsi Geocoding menggunakan OpenStreetMap Nominatim (sudah ada)
+const geocodeWithNominatim = async (query) => {
+  if (!query || query.trim() === "") {
+    return null;
+  }
+  console.log(`  Attempting geocoding with Nominatim for query: "${query}"`);
+  try {
+    const nominatimUrl = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=1`;
+    const response = await axios.get(nominatimUrl, {
+      headers: {
+        "User-Agent": "UMKMMapsBejiarumApp/1.0 (contact@your-email.com)", // Penting untuk Nominatim! Ganti email
+      },
+    });
+
+    if (response.data && response.data.length > 0) {
+      const result = response.data[0];
+      const lat = parseFloat(result.lat);
+      const lng = parseFloat(result.lon);
+      if (!isNaN(lat) && !isNaN(lng)) {
+        console.log(`  Nominatim successful: ${lat}, ${lng} for "${query}"`);
+        return { lat, lng };
+      }
+    }
+    console.warn(`  Nominatim failed to find coordinates for "${query}".`);
+    return null;
+  } catch (error) {
+    console.error(`  Error calling Nominatim API for "${query}":`, error.message);
+    return null;
+  }
 };
 
 const resolveShortMapsUrl = async (shortUrl) => {
   try {
     console.log(`Backend: Mencoba meresolve URL pendek: ${shortUrl}`);
     const response = await axios.get(shortUrl, {
-      // Tetap gunakan axios.get
       maxRedirects: 10,
       validateStatus: (status) => status >= 200 && status < 400,
     });
 
     const longUrl = response.request.res.responseUrl || response.request.responseURL || response.headers.location;
-    console.log(`Backend: URL panjang final setelah redirect: ${longUrl}`); // ✨ LOG INI ✨
+    console.log(`Backend: URL panjang final setelah redirect: ${longUrl}`);
 
     if (longUrl) {
-      const coords = extractLatLngFromGoogleMapsUrl(longUrl);
-      console.log(`Backend: Hasil extractLatLngFromGoogleMapsUrl:`, coords); // ✨ LOG INI ✨
+      let coords = extractLatLngFromGoogleMapsUrl(longUrl);
+      console.log(`Backend: Hasil extractLatLngFromGoogleMapsUrl (langsung):`, coords);
+
       if (coords) {
         return { ...coords, longUrl };
       }
+
+      // ✨ BARU: Jika ekstraksi langsung gagal, coba ekstrak nama/alamat dan pakai Nominatim ✨
+      let potentialQuery = null;
+      try {
+        const urlObj = new URL(longUrl);
+        // Coba ekstrak dari path, misal '/place/Nama+Tempat'
+        const pathSegments = urlObj.pathname.split("/").filter((s) => s);
+        if (pathSegments.length > 1 && pathSegments[0].toLowerCase() === "place" && pathSegments[1]) {
+          potentialQuery = decodeURIComponent(pathSegments[1].replace(/\+/g, " "));
+        } else if (pathSegments.length > 0) {
+          // Coba segmen terakhir jika terlihat seperti nama (bukan koordinat)
+          const lastSegment = pathSegments[pathSegments.length - 1];
+          if (!lastSegment.match(/^-?\d+\.\d+,-?\d+\.\d+$/) && lastSegment.length > 3) {
+            potentialQuery = decodeURIComponent(lastSegment.replace(/\+/g, " "));
+          }
+        }
+        // Coba ekstrak dari query parameter 'q'
+        const queryParamQ = urlObj.searchParams.get("q");
+        if (queryParamQ) {
+          potentialQuery = queryParamQ;
+        }
+      } catch (e) {
+        console.warn("Backend: Gagal mengurai URL untuk Nominatim query:", e.message);
+      }
+
+      if (potentialQuery) {
+        console.log(`Backend: Potensi query untuk Nominatim: "${potentialQuery}"`);
+        coords = await geocodeWithNominatim(potentialQuery);
+        if (coords) {
+          return { ...coords, longUrl };
+        }
+      }
     }
-    console.warn(`Backend: Tidak dapat mengekstrak koordinat dari URL final: ${longUrl}`); // ✨ LOG INI ✨
+    console.warn(`Backend: Tidak dapat mengekstrak koordinat dari URL final (setelah semua upaya): ${longUrl}`);
     return null;
   } catch (error) {
     console.error(`Backend: Gagal meresolve URL pendek ${shortUrl}:`, error.message);
     if (error.response) {
       console.error(`Backend: Status respons: ${error.response.status}`);
-      console.error(`Backend: Data respons: ${JSON.response.data}`);
+      console.error(`Backend: Data respons: ${JSON.stringify(error.response.data)}`);
     }
     return null;
   }
