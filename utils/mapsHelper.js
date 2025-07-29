@@ -1,9 +1,8 @@
 // backend/utils/mapsHelper.js
-const axios = require("axios"); // Kita akan pakai axios untuk request HTTP, instal dulu kalau belum: npm install axios
+const axios = require("axios"); // Pastikan axios sudah diinstal: npm install axios
 
 /**
  * Mengekstrak latitude dan longitude dari berbagai format URL Google Maps (termasuk hasil redirect).
- * Fungsi ini sama dengan yang di frontend, tapi kita juga butuh di backend.
  * @param {string} url - URL Google Maps (panjang)
  * @returns {{lat: number, lng: number}|null} Objek berisi lat dan lng, atau null jika tidak ditemukan.
  */
@@ -56,29 +55,35 @@ const extractLatLngFromGoogleMapsUrl = (url) => {
 const resolveShortMapsUrl = async (shortUrl) => {
   try {
     console.log(`Backend: Mencoba meresolve URL pendek: ${shortUrl}`);
-    // Melakukan HEAD request untuk mengikuti redirect tanpa mengunduh konten
-    const response = await axios.head(shortUrl, {
-      maxRedirects: 10, // Batasi jumlah redirect yang diikuti
-      validateStatus: (status) => status >= 200 && status < 400, // Ikuti hanya status redirect yang valid
+    // ✨ PERBAIKAN DI SINI: Ganti axios.head() menjadi axios.get() ✨
+    const response = await axios.get(shortUrl, {
+      maxRedirects: 10,
+      validateStatus: (status) => status >= 200 && status < 400,
     });
 
-    const longUrl = response.request.res.responseUrl || response.headers.location; // Ambil URL final setelah redirect
+    // Periksa response.request.res.responseUrl untuk URL final setelah redirect
+    const longUrl = response.request.res.responseUrl || response.request.responseURL || response.headers.location; // Fallback untuk berbagai lingkungan axios
     console.log(`Backend: URL panjang ditemukan: ${longUrl}`);
 
     if (longUrl) {
       const coords = extractLatLngFromGoogleMapsUrl(longUrl);
       if (coords) {
-        return { ...coords, longUrl }; // Mengembalikan koordinat dan URL panjangnya
+        return { ...coords, longUrl };
       }
     }
-    return null; // Tidak dapat mengekstrak koordinat
+    return null;
   } catch (error) {
     console.error(`Backend: Gagal meresolve URL pendek ${shortUrl}:`, error.message);
+    // Jika error, cek response.status untuk melihat apakah ada 400/500
+    if (error.response) {
+      console.error(`Backend: Status respons: ${error.response.status}`);
+      console.error(`Backend: Data respons: ${JSON.stringify(error.response.data)}`);
+    }
     return null;
   }
 };
 
 module.exports = {
-  extractLatLngFromGoogleMapsUrl, // Mungkin tidak terpakai langsung, tapi bagus untuk konsistensi
+  extractLatLngFromGoogleMapsUrl,
   resolveShortMapsUrl,
 };
